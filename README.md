@@ -217,23 +217,26 @@ provideHttpClient(withInterceptors([authInterceptor]))
 
 ## Mülakat Soruları
 
-**Q: Signal vs Observable farkı?**
-A: Signal senkron, reactive primitive — anlık değer okunabilir, `()` ile. Observable asenkron, lazy, stream. Signal daha basit, Observable daha güçlü (operator pipeline).
+**Q: Angular Signal nedir? Observable'dan farkı ve ne zaman tercih edilir?**
+A: Signal (Angular 16+): Senkron reaktif primitive — anlık değer tutar, `signal(0)` ile oluştur, `count()` ile oku, `count.set(1)` ile güncelle. Angular change detection otomatik tracking yapar — `computed()` ve `effect()` bağımlı signal'lar değişince yeniden çalışır. Observable: Asenkron, lazy stream — subscribe edilene kadar çalışmaz. Operatör pipeline (map, filter, switchMap). RxJS ile güçlü. Tercih: HTTP istekleri, WebSocket, event stream → Observable. UI state, form değerleri, basit reaktivite → Signal. `toSignal(observable$)`: Observable'ı Signal'e dönüştür; Angular template'de her ikisini birlikte kullan.
 
-**Q: `switchMap` ne zaman kullanılır?**
-A: Yeni değer gelince önceki işlemi iptal etmek istediğinde — search, route değişimi. Form submit için `exhaustMap` (bir bitene kadar yeni tıklamayı ignore).
+**Q: RxJS `switchMap`, `concatMap`, `mergeMap`, `exhaustMap` farkları nelerdir?**
+A: `switchMap`: Yeni değer gelince önceki inner Observable'ı iptal et — arama kutusu (her tuş önceki HTTP isteğini iptal eder). `concatMap`: Sıralı — önceki bitmeden yeni başlamaz. Form submit sonrası sıralı işlemler için. `mergeMap`: Paralel — hepsi aynı anda çalışır, sıra yok. Bağımsız paralel HTTP istekleri. `exhaustMap`: Önceki bitmeden yeni değeri ignore et — çift tıklama önleme, submit butonu. Hata: `switchMap` ile form submit → kullanıcı hızlı tıklarsa önceki request iptal olur, DB'ye iki kez kayıt gidebilir. Çözüm: Submit için `exhaustMap`.
 
-**Q: NgRx neden kullanılır?**
-A: Büyük uygulamalarda component'lar arası state yönetimi için. Single source of truth, zaman yolculuğu debugging, effect ile side effect izolasyonu.
+**Q: NgRx neden kullanılır? Ne zaman tercih edilmez?**
+A: NgRx (Redux pattern): Single source of truth (tek store), immutable state (her action yeni state üretir), Redux DevTools ile time-travel debugging, Effect ile side effect izolasyonu (HTTP, localStorage). Büyük takım: Her değişiklik action → reducer → selector zincirinden geçer, takip edilebilir. `createSelector` memoized: Girdi selector'lar değişmezse sonucu cache'den döner — büyük state'lerde performans kritik. Ne zaman tercih edilmez: Küçük/orta uygulama — fazla boilerplate (action + reducer + selector + effect = 4 dosya). Alternatif: Signal + Service (basit state), BehaviorSubject + Service (orta karmaşıklık). Kural: 5+ geliştirici + karmaşık cross-component state → NgRx; aksi halde overkill.
 
-**Q: `createSelector` neden memoized?**
-A: Girdi selector'lar değişmezse sonucu hesaplamaz — tekrar kullanır. Büyük state'lerde performans kritik.
+**Q: Angular change detection nasıl çalışır? `OnPush` ne zaman kullanılır?**
+A: Default strategy: Herhangi bir event (click, HTTP, timer) sonrası tüm component tree kontrol edilir — küçük appde sorun yok, büyük appde yavaş. `ChangeDetectionStrategy.OnPush`: Component yalnızca şu durumlarda check edilir: `@Input` referansı değişti, component içinden event fırlatıldı, `async` pipe ile Observable'dan yeni değer geldi, `markForCheck()` çağrıldı. Performans: Büyük listeler için `OnPush` + immutable data → check sayısı dramatik düşer. Signal ile: Angular değişimi otomatik tracking yapar, `OnPush` ile sinerjik. `trackBy`: `*ngFor` ile liste elemanlarını identity ile takip et — tüm listeyi yeniden render etme.
 
-**Q: Standalone component ile NgModule farkı?**
-A: Standalone: modülsüz, `imports` direkt componenta. NgModule: merkezi bildirim, lazy loaded feature modules. Angular 17'de standalone default.
+**Q: Standalone component ile NgModule farkı? Angular 17'deki değişiklik?**
+A: NgModule (klasik): `@NgModule` ile component, directive, pipe bildirimi. Lazy loading için `loadChildren()` → feature module. Merkezi bağımlılık yönetimi. Standalone (Angular 14+, Angular 17'de default): `@Component({ standalone: true, imports: [CommonModule, RouterModule] })` — modülsüz. Direkt `imports` ile bağımlılık. `bootstrapApplication()` ile başlatma. Lazy loading: `loadComponent(() => import('./feature.component'))`. Avantaj: Daha az boilerplate, tree-shaking daha etkili, test için `TestBed.configureTestingModule` daha küçük. Migration: `ng generate @angular/core:standalone` ile mevcut kodu otomatik dönüştür.
 
-**Q: Lazy loading nasıl çalışır?**
-A: Route'a gidilene kadar component bundle'ı indirilmez. `loadComponent()` ile chunk ayrılır — ilk yükleme daha hızlı.
+**Q: Angular lazy loading ve bundle optimization nasıl çalışır?**
+A: Lazy loading: Route'a gidilene kadar JavaScript bundle indirilmez — ilk yükleme hızı (TTI). `loadComponent()` veya `loadChildren()` ile chunk ayrılır, Webpack/esbuild ayrı `.js` dosyası üretir. Preloading: `PreloadAllModules` — arka planda diğer route'ları önceden indir. Bundle optimization: `ng build --configuration=production` — tree-shaking (kullanılmayan kod elenir), minification, dead code elimination. `source-map-explorer` ile bundle analiz et. Standalone + OnPush + Signal kombinasyonu en küçük bundle. `@defer` (Angular 17): Template içinde component'ı lazy load — viewport'a girinceye kadar indirme (`@defer (on viewport)`).
+
+**Q: Angular Reactive Forms ile Template-driven Forms farkı?**
+A: Reactive Forms: `FormBuilder`, `FormGroup`, `FormControl` — TypeScript'te tanımlanır, test kolay, dinamik form için. `valueChanges` Observable ile anlık validasyon, debounce. `Validators.required`, custom validator. Template-driven: `[(ngModel)]` ile two-way binding — küçük formlar için hızlı, ancak test'te `@ViewChild` gerekir, dinamik form zor. Tercih: Karmaşık validasyon, dinamik alan ekleme/çıkarma, unit test → Reactive Forms. Basit login formu → Template-driven. `AbstractControl.statusChanges` + `switchMap` ile form değişince backend'e anlık gönder (otosave).
 
 ---
 
